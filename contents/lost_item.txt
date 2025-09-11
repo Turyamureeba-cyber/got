@@ -1,0 +1,5 @@
+<?php
+// contents/post_item.php
+if (session_status() === PHP_SESSION_NONE) session_start();
+require_once 'db.php';
+?>
