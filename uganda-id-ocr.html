@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ugandan ID Card Information Extractor</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif}
+    body{background:linear-gradient(135deg,#f5f7f9 0%,#e4e8ec 100%);color:#333;line-height:1.6;padding:20px;min-height:100vh}
+    .container{max-width:1200px;margin:0 auto;background:#fff;border-radius:15px;box-shadow:0 10px 30px rgba(0,0,0,.1);padding:30px}
+    header{text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #eaeaea}
+    h1{color:#1a73e8;margin-bottom:10px;font-size:1.9rem}
+    .subtitle{color:#5f6368;font-size:1rem;max-width:780px;margin:0 auto}
+    .content{display:flex;flex-wrap:wrap;gap:30px;margin-top:20px}
+    .upload-section,.results-section{flex:1;min-width:320px}
+    .section-title{font-size:1.25rem;margin-bottom:20px;color:#1a73e8;padding-bottom:10px;border-bottom:2px solid #eaeaea}
+    .card{background:#fff;border-radius:12px;box-shadow:0 5px 15px rgba(0,0,0,.06);padding:25px;margin-bottom:25px;transition:transform .3s ease}
+    .card:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,.1)}
+    .image-options{display:flex;gap:12px;margin-bottom:15px;flex-wrap:wrap}
+    .btn{padding:12px 20px;border:none;border-radius:8px;cursor:pointer;font-weight:600;transition:all .2s ease;display:inline-flex;align-items:center;justify-content:center;font-size:.98rem}
+    .btn-primary{background:#1a73e8;color:#fff;box-shadow:0 3px 5px rgba(26,115,232,.18)}
+    .btn-primary:hover{background:#0d62c9;transform:translateY(-1px)}
+    .btn-secondary{background:#f1f3f4;color:#333}
+    .btn-secondary:hover{background:#e6e8ea;transform:translateY(-1px)}
+    .preview-container{margin-top:12px;text-align:center}
+    .image-preview{max-width:100%;max-height:320px;border-radius:10px;border:2px dashed #ccc;display:none;box-shadow:0 5px 15px rgba(0,0,0,.08);background:#fafafa}
+    .camera-container{margin-top:15px;display:none}
+    #cameraStream{width:100%;border-radius:10px;background:#eee;box-shadow:0 5px 15px rgba(0,0,0,.08)}
+    .camera-controls{display:flex;gap:10px;margin-top:10px;justify-content:center;flex-wrap:wrap}
+    .result-item{margin-bottom:18px;padding:16px;background:linear-gradient(135deg,#f8f9fa 0%,#e9ecef 100%);border-radius:10px;border-left:4px solid #1a73e8}
+    .result-label{font-weight:700;color:#5f6368;display:block;margin-bottom:6px;font-size:.95rem}
+    .result-value{font-size:1.15rem;color:#202124;word-break:break-all;font-weight:600}
+    .note{background:#fff8e1;padding:16px;border-left:4px solid #ffc107;margin:18px 0 0;border-radius:8px;font-size:.98rem;line-height:1.6}
+    .progress-bar{height:8px;background:#f1f3f4;border-radius:4px;margin:15px 0 0;overflow:hidden;display:none}
+    .progress{height:100%;background:linear-gradient(90deg,#1a73e8 0%,#0d62c9 100%);width:0%;transition:width .3s ease;border-radius:4px}
+    .status{text-align:center;margin:12px 0 0;font-weight:600;color:#5f6368}
+    .success{color:#0f9d58}.error{color:#db4437}
+    @media (max-width:768px){.content{flex-direction:column}.container{padding:20px}h1{font-size:1.7rem}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Ugandan ID Card Information Extractor</h1>
+      <p class="subtitle">Use Upload or Take Photo, then click “Extract Information”. Works best over HTTPS or localhost.</p>
+    </header>
+
+    <div class="content">
+      <div class="upload-section">
+        <h2 class="section-title">Upload or Capture ID</h2>
+        <div class="card">
+          <div class="image-options">
+            <button id="uploadFileBtn" class="btn btn-primary" type="button">📁 Upload Image</button>
+            <button id="takePhotoBtn" class="btn btn-secondary" type="button">📷 Take Photo</button>
+          </div>
+
+          <input type="file" id="fileInput" accept="image/*" style="display:none"/>
+
+          <div class="preview-container">
+            <img id="imagePreview" class="image-preview" alt="Image preview"/>
+          </div>
+
+          <div class="camera-container">
+            <video id="cameraStream" autoplay playsinline muted></video>
+            <div class="camera-controls">
+              <button id="captureBtn" class="btn btn-primary" type="button">Capture</button>
+              <button id="switchCameraBtn" class="btn btn-secondary" type="button">Switch Camera</button>
+              <button id="stopCameraBtn" class="btn btn-secondary" type="button">Stop Camera</button>
+            </div>
+            <canvas id="canvas" style="display:none"></canvas>
+          </div>
+
+          <div class="note">
+            <p><strong>Tip:</strong> Place the ID flat, avoid glare, keep text horizontal.</p>
+            <p id="originWarn" style="margin-top:8px;color:#b23b00;font-weight:600;display:none">Warning: Camera requires HTTPS or localhost. Serve this file via http://localhost</p>
+          </div>
+
+          <button id="processBtn" class="btn btn-primary" style="width:100%;margin-top:16px;display:none;padding:14px" type="button">
+            🚀 Extract Information
+          </button>
+
+          <div class="progress-bar" id="progressContainer">
+            <div class="progress" id="progressBar"></div>
+          </div>
+          <div class="status" id="statusMessage"></div>
+        </div>
+      </div>
+
+      <div class="results-section">
+        <h2 class="section-title">Extracted Information</h2>
+        <div class="card">
+          <div class="result-item">
+            <span class="result-label">ID Number</span>
+            <span id="idNumber" class="result-value">-</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Full Name</span>
+            <span id="fullName" class="result-value">-</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Date of Birth</span>
+            <span id="dob" class="result-value">-</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Issue Date</span>
+            <span id="issueDate" class="result-value">-</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Raw OCR Text</span>
+            <textarea id="rawText" style="width:100%;height:140px;padding:12px;margin-top:8px;border-radius:8px;border:1px solid #ddd;font-family:monospace;font-size:.92rem" readonly></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.3/dist/tesseract.min.js"></script>
+  <script>
+    window.addEventListener('load', () => {
+      const isSecure = window.isSecureContext || location.protocol === 'https:';
+      const originWarn = document.getElementById('originWarn');
+      if (!isSecure && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        originWarn.style.display = 'block';
+      }
+
+      // UI elements
+      const uploadFileBtn = document.getElementById('uploadFileBtn');
+      const takePhotoBtn = document.getElementById('takePhotoBtn');
+      const fileInput = document.getElementById('fileInput');
+      const imagePreview = document.getElementById('imagePreview');
+      const cameraContainer = document.querySelector('.camera-container');
+      const cameraStream = document.getElementById('cameraStream');
+      const captureBtn = document.getElementById('captureBtn');
+      const switchCameraBtn = document.getElementById('switchCameraBtn');
+      const stopCameraBtn = document.getElementById('stopCameraBtn');
+      const processBtn = document.getElementById('processBtn');
+      const canvas = document.getElementById('canvas');
+      const progressContainer = document.getElementById('progressContainer');
+      const progressBar = document.getElementById('progressBar');
+      const statusMessage = document.getElementById('statusMessage');
+      const ctx = canvas.getContext('2d');
+      const idNumberEl = document.getElementById('idNumber');
+      const fullNameEl = document.getElementById('fullName');
+      const dobEl = document.getElementById('dob');
+      const issueDateEl = document.getElementById('issueDate');
+      const rawTextEl = document.getElementById('rawText');
+
+      let currentStream = null;
+      let facingMode = 'environment';
+
+      function setStatus(msg, kind) {
+        console.log('[Status]', msg);
+        statusMessage.textContent = msg;
+        statusMessage.className = 'status' + (kind ? ' ' + kind : '');
+      }
+
+      // Upload
+      uploadFileBtn.addEventListener('click', () => {
+        console.log('Upload button clicked');
+        fileInput.click();
+      });
+      fileInput.addEventListener('change', (e) => {
+        console.log('File input change', e.target.files && e.target.files,[object Object],);
+        if (e.target.files && e.target.files,[object Object],) {
+          const file = e.target.files,[object Object],;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            imagePreview.src = ev.target.result;
+            imagePreview.style.display = 'block';
+            cameraContainer.style.display = 'none';
+            processBtn.style.display = 'block';
+            setStatus('Image ready for processing', 'success');
+            if (currentStream) stopCamera();
+          };
+          reader.onerror = (err) => {
+            console.error('FileReader error', err);
+            setStatus('Failed to read image: ' + err.message, 'error');
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
+      // Camera
+      takePhotoBtn.addEventListener('click', () => {
+        console.log('Take Photo clicked');
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setStatus('Camera not supported in this browser.', 'error');
+          return;
+        }
+        startCamera();
+        imagePreview.style.display = 'none';
+        processBtn.style.display = 'block';
+      });
+
+      captureBtn.addEventListener('click', () => {
+        console.log('Capture clicked');
+        if (!cameraStream.videoWidth || !cameraStream.videoHeight) {
+          setStatus('Camera not ready yet. Wait a second and try again.', 'error');
+          return;
+        }
+        canvas.width = cameraStream.videoWidth;
+        canvas.height = cameraStream.videoHeight;
+        ctx.drawImage(cameraStream, 0, 0, canvas.width, canvas.height);
+        imagePreview.src = canvas.toDataURL('image/png');
+        imagePreview.style.display = 'block';
+        cameraContainer.style.display = 'none';
+        setStatus('Image captured. Ready to process.', 'success');
+        stopCamera();
+      });
+
+      switchCameraBtn.addEventListener('click', () => {
+        console.log('Switch camera');
+        facingMode = facingMode === 'environment' ? 'user' : 'environment';
+        stopCamera();
+        startCamera();
+      });
+
+      stopCameraBtn.addEventListener('click', () => {
+        console.log('Stop camera');
+        stopCamera();
+        setStatus('Camera stopped.', '');
+      });
+
+      // Process OCR
+      processBtn.addEventListener('click', () => {
+        console.log('Process clicked, src present:', !!imagePreview.src);
+        if (!imagePreview.src) {
+          setStatus('No image selected.', 'error');
+          return;
+        }
+        processImage(imagePreview.src);
+      });
+
+      function startCamera() {
+        cameraContainer.style.display = 'block';
+        setStatus('Starting camera...', '');
+        const constraints = { video: { facingMode }, audio: false };
+        navigator.mediaDevices.getUserMedia(constraints)
+          .then((stream) => {
+            cameraStream.srcObject = stream;
+            cameraStream.onloadedmetadata = () => cameraStream.play().catch(()=>{});
+            currentStream = stream;
+            setStatus('Camera ready. Click Capture to take a photo.', 'success');
+          })
+          .catch((error) => {
+            console.error('getUserMedia error', error);
+            setStatus('Unable to access camera: ' + error.message + (isSecure ? '' : ' (Requires HTTPS or localhost)'), 'error');
+          });
+      }
+
+      function stopCamera() {
+        if (currentStream) {
+          currentStream.getTracks().forEach(t => t.stop());
+          currentStream = null;
+        }
+      }
+
+      function preprocessImageToDataURL(imgEl) {
+        const w = imgEl.naturalWidth || imgEl.width || 0;
+        const h = imgEl.naturalHeight || imgEl.height || 0;
+        if (!w || !h) return imagePreview.src;
+        const tmp = document.createElement('canvas');
+        const tctx = tmp.getContext('2d', { willReadFrequently: true });
+        tmp.width = w; tmp.height = h;
+        tctx.drawImage(imgEl, 0, 0, w, h);
+        const imgData = tctx.getImageData(0, 0, w, h);
+        const d = imgData.data, contrast = 1.35, intercept = 128*(1-contrast);
+        for (let i=0;i<d.length;i+=4){
+          const gray = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+          let v = contrast*gray+intercept; v = Math.max(0, Math.min(255, v));
+          d[i]=d[i+1]=d[i+2]=v;
+        }
+        tctx.putImageData(imgData,0,0);
+        return tmp.toDataURL('image/png');
+      }
+
+      function normalizeOCRNoise(s){
+        return (s||'').replace(/O/g,'0').replace(/[Il]/g,'1').replace(/S/g,'5');
+      }
+
+      function parseIDText(text){
+        const raw=text||'';
+        const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
+        let idNumber='', fullName='', dob='', issueDate='';
+        const all=normalizeOCRNoise(raw.replace(/\s+/g,' '));
+
+        const id14=all.match(/\b\d{14}\b/);
+        if (id14) idNumber=id14,[object Object],; else {
+          const idFallback=all.match(/\b\d{13,15}\b/);
+          if (idFallback) idNumber=idFallback,[object Object],;
+        }
+
+        const allDates=all.match(/\b\d{2}\.\d{2}\.\d{4}\b/g)||[];
+        if (allDates.length>0) dob=allDates,[object Object],;
+        if (allDates.length>1) issueDate=allDates,[object Object],;
+
+        const headerIdx=lines.findIndex(l=>/REPUBLIC OF UGANDA|NATIONAL ID CARD|SPECIMEN/i.test(l));
+        const start=headerIdx>=0?headerIdx+1:0;
+        const nameCandidates=[];
+        for(let i=start;i<Math.min(lines.length,start+6);i++){
+          const ln=lines[i]; if(!ln) continue;
+          if(/\b\d{2}\.\d{2}\.\d{4}\b/.test(ln)) break;
+          if(/\b\d{8,}\b/.test(ln)) continue;
+          if(/UGANDA|NATIONAL|ID|CARD|REPUBLIC|NIRA|SPECIMEN/i.test(ln)) continue;
+          nameCandidates.push(ln);
+        }
+        const cleaned=nameCandidates.map(s=>s.replace(/[^A-Za-z\s\-.]/g,'').trim()).filter(s=>s.length>=2);
+        if(cleaned.length>=1){ fullName=cleaned.slice(0,2).join(' ').replace(/\s+/g,' ').trim(); }
+        if(!fullName){
+          const capLine=lines.find(l=>/^[A-Z][a-z]+([\s-][A-Z][a-z]+)*$/.test(l));
+          if(capLine) fullName=capLine.trim();
+        }
+        return {idNumber, fullName, dob, issueDate};
+      }
+
+      function processImage(imageSrc){
+        idNumberEl.textContent='Processing...';
+        fullNameEl.textContent='Processing...';
+        dobEl.textContent='Processing...';
+        issueDateEl.textContent='Processing...';
+        rawTextEl.value='Extracting text...';
+        setStatus('Processing image with OCR...', '');
+        progressContainer.style.display='block';
+        progressBar.style.width='0%';
+
+        const tempImg=new Image();
+        tempImg.onload=async ()=>{
+          try{
+            const preprocessed=preprocessImageToDataURL(tempImg);
+            const { data } = await Tesseract.recognize(
+              preprocessed,'eng',
+              {
+                logger:m=>{
+                  if(m.status==='recognizing text' && typeof m.progress==='number'){
+                    progressBar.style.width=`${m.progress*100}%`;
+                    setStatus(`Processing: ${Math.round(m.progress*100)}%`, '');
+                  }
+                },
+                tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.- 0123456789',
+                preserve_interword_spaces:'1'
+              }
+            );
+            const text=(data && data.text) ? data.text : '';
+            rawTextEl.value=text;
+            const parsed=parseIDText(text);
+            idNumberEl.textContent=parsed.idNumber || 'Not found';
+            fullNameEl.textContent=parsed.fullName || 'Not found';
+            dobEl.textContent=parsed.dob || 'Not found';
+            issueDateEl.textContent=parsed.issueDate || 'Not found';
+            progressContainer.style.display='none';
+            if(parsed.idNumber && parsed.fullName){ setStatus('Information extracted successfully!','success'); }
+            else { setStatus('Some information could not be extracted. Check raw text.','error'); }
+          }catch(err){
+            console.error('OCR error', err);
+            setStatus('Error processing image: '+ err.message, 'error');
+            progressContainer.style.display='none';
+          }
+        };
+        tempImg.onerror=()=>{ setStatus('Failed to load the image for processing.', 'error'); progressContainer.style.display='none'; };
+        tempImg.src=imageSrc;
+      }
+    });
+  </script>
+</body>
+</html>
